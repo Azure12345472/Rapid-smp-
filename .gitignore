@@ -22,4 +22,118 @@
 /app/tmp/*
 /app/Config/core.php
 /app/Config/database.php
-/vendors/*
+/```js
+const express = require('express');
+// const enforce = require('express-sslify');
+const fs = require('fs');
+const path = require('path');
+const multer = require('multer');
+
+const app = express();
+const port = 1030;
+
+// Serve static files from the root directory, but don't render directories/files
+app.use(express.static(__dirname));
+// app.use(enforce.HTTPS({trustProtoHeader: true}));
+
+// Set up file upload using multer
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        const folderName = req.params.folderName;
+        const folderPath = path.join(__dirname, 'tempfiles', folderName);
+        fs.mkdirSync(folderPath, {recursive: true});
+        cb(null, folderPath);
+    },
+    filename: (req, file, cb) => {
+        cb(null, file.originalname);
+    },
+});
+const upload = multer({
+    storage,
+    limits: {
+        fileSize: 15 * 1024 * 1024, // 5 MB limit
+    },
+});
+
+// Create folder route
+app.post('/createFolder', express.json(), (req, res) => {
+    const folderName = req.body.folderName;
+    const folderPath = path.join(__dirname, 'tempfiles', folderName);
+    fs.mkdirSync(folderPath, {recursive: true});
+    res.sendStatus(200);
+});
+
+app.get('/getfiles/:folderName', (req, res) => {
+    const folderName = req.params.folderName;
+    const folderPath = path.join(__dirname, 'tempfiles', folderName);
+    try {
+        res.json(fs.readdirSync(folderPath));
+    } catch (err) {
+        res.json({});
+    }
+})
+
+
+// Get IP address route
+app.get('/getIPAddress', (req, res) => {
+    // console.log(req.headers.host) // doesn't return user IP
+    // if (req.headers.host.startsWith("127.0.0.1")) {
+    //     let ipAddress = req.socket.remoteAddress;
+    //     if (ipAddress.substr(0, 7) === "::ffff:") {
+    //         ipAddress = ipAddress.substr(7);
+    //     }
+    //     // res.send(ipAddress + `-${Date.now()}`)
+        res.send(`-${Date.now()}`);
+    // } else {
+    //     res.send("403 - Forbidden")
+    // }
+});
+
+// Upload file route
+app.post('/upload/:folderName', upload.single('file'), (req, res) => {
+    res.status(200).send(req.params.folderName);
+});
+
+// Serve HTML files
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, '/index.html'));
+});
+
+app.get('/home/', (req, res) => {
+    res.sendFile(path.join(__dirname, '/index.html'));
+});
+
+app.get('/credits/', (req, res) => {
+    res.sendFile(path.join(__dirname, '/credits.html'));
+});
+
+app.get('/privacy-policy/', (req, res) => {
+    res.sendFile(path.join(__dirname, '/pp.html'));
+});
+
+// Prevent non-local POST requests
+app.post('*', (req, res, next) => {
+    if (req.headers.host.startsWith("127.0.0.1:1030")) {
+        next();
+    } else {
+        res.sendStatus(403);
+    }
+});
+
+app.use((req, res) => {
+    res.status(404).sendFile(path.join(__dirname, '/404.html'));
+});
+
+// Start server
+app.listen(port, () => console.log(`Online @ ${port}`));
+
+// Delete folders older than 5 minutes
+fs.watch('tempfiles', () => {
+    const folders = fs.readdirSync('tempfiles');
+    folders.forEach(folderName => {
+        const timestamp = parseInt(folderName.split('-')[1]);
+        if (Date.now() - timestamp > 5 * 60000) {
+            fs.rmSync(path.join(__dirname, "tempfiles", folderName), {recursive: true})
+        }
+    });
+});```
